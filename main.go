@@ -24,12 +24,23 @@ type Company struct {
 	IntText      []int    `json:"int_text"`
 }
 
+//To cache the previous key lookups
+var cache map[string]interface{}
 
 //searches through the source for possible occurrence of the key
 func SearchKey(key string, source map[string]interface{}) (map[string]interface{},error) {
 
+
+	//check if the value of key is in cache
+	if _, ok := cache[key]; ok {
+		return cache[key].(map[string]interface{}),nil
+	}
+
 	//If the key exists in the first level return it
 	if _, ok := source[key]; ok {
+
+		//cache the map where key is found
+		cache[key] = source
 		return source,nil
 	}
 	
@@ -42,11 +53,12 @@ func SearchKey(key string, source map[string]interface{}) (map[string]interface{
 	    switch valReflected.Kind() {
         
 		//recursively search through the nested MAP
-		case reflect.Map :
+		case reflect.Map :   
 			nestedMap := valReflected.Interface().(map[string]interface{})
 			
 			//if the key is located return the entire MAP where it was found
 			if found, err := SearchKey(key,nestedMap); err == nil {
+				cache[key] = found
 				return found,nil
 			}
         //Iterate through the slice to check if any element is a MAP
@@ -63,6 +75,7 @@ func SearchKey(key string, source map[string]interface{}) (map[string]interface{
 					
 					//if the key is located return the entire MAP where it was found
 					if found, err := SearchKey(key,nestedMapInSlice); err == nil {
+						cache[key] = found
 						return found,nil
 					}
 				}
@@ -97,6 +110,7 @@ func RemoveKey(key string, source map[string]interface{}) {
 		fmt.Println(err)
 	} else {
 		//delete function deleted the key from the MAP 
+		delete(cache,key)
 		delete(foundMap,key)
 		fmt.Printf("Key Deleted : %v\n\n",key)
 	}
@@ -133,11 +147,12 @@ func PopulateStruct(source map[string]interface{}, sink interface{}) error {
 		//if it is settable search the MAP for the field json tag as the key
 		//and store the reference to the MAP where key is located
 		foundMap,err := SearchKey(tag,source); 
-
+		
 		if err != nil {
-			return err
+			fmt.Printf("Value Not Found for field :: %v \n",field.Name)
+			continue
 		}
-
+		
 		//Case to match the kind of field value
 		switch fieldReflected.Kind() {
 		
@@ -279,6 +294,8 @@ func main() {
 		"int_text" : []interface{}{1,3,4},
 	}
 
+	cache = make(map[string]interface{})
+
 
 	//sample value to update a particular key
 	newMap := map[string]interface{}{
@@ -289,8 +306,11 @@ func main() {
 	//Function to set a value to a particular key
 	SetKeyValue("pincode",newMap,source)
 
+	//To test the memoization
+	SetKeyValue("pincode",110052,source)
+
 	//Function to remove a particular key
-	RemoveKey("status",source)
+	RemoveKey("revenue",source)
 
 	//variable of struct Company to Unmarshal the source
 	var company Company
